@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guard Training Feedback - Real-time</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; color: #2c3e50; font-size: 24px; }
+        .controls { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .search-box { display: flex; gap: 10px; margin-bottom: 15px; }
+        .search-box input { flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 5px; }
+        .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .filter-item { flex: 1; min-width: 150px; }
+        .filter-item label { display: block; font-size: 12px; color: #6c757d; margin-bottom: 3px; }
+        .filter-item select { width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        .stats { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px; }
+        .stat { background: #e9ecef; padding: 10px 15px; border-radius: 5px; border-left: 4px solid #0d6efd; min-width: 100px; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #0d6efd; display: block; }
+        .stat-label { font-size: 12px; color: #6c757d; }
+        .table-container { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #343a40; color: white; padding: 12px; text-align: left; font-weight: 600; font-size: 14px; }
+        td { padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 13px; vertical-align: middle; }
+        tr:hover { background: #f8f9fa; }
+        .rating-cell { text-align: center; font-weight: bold; }
+        .rating-5 { color: #28a745; }
+        .rating-4 { color: #20c997; }
+        .rating-3 { color: #ffc107; }
+        .rating-2 { color: #fd7e14; }
+        .rating-1 { color: #dc3545; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .btn { padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #0d6efd; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-info { background: #17a2b8; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn:hover { opacity: 0.9; }
+        .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
+        .page-btn { padding: 8px 12px; border: 1px solid #dee2e6; background: white; cursor: pointer; border-radius: 4px; }
+        .page-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
+        .page-btn:hover:not(.active) { background: #f8f9fa; }
+        .loading { text-align: center; padding: 40px; color: #6c757d; }
+        .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 900px; border-radius: 10px; max-height: 85vh; overflow-y: auto; }
+        .close { float: right; font-size: 28px; cursor: pointer; color: #6c757d; }
+        .close:hover { color: #000; }
+        .details-section { margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; border-left: 3px solid #0d6efd; }
+        .rating-bar { height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; margin-top: 5px; }
+        .rating-fill { height: 100%; background: #0d6efd; }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+        .status-connected { background: #28a745; }
+        .status-disconnected { background: #dc3545; }
+        .status-loading { background: #ffc107; }
+        .last-updated { font-size: 12px; color: #6c757d; margin-top: 5px; }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .stats { flex-direction: column; }
+            .stat { width: 100%; }
+            .btn-group { flex-direction: column; }
+            .table-container { overflow-x: auto; }
+            .filters { flex-direction: column; }
+            .filter-item { width: 100%; }
+            .search-box { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🛡️ Guard Training Feedback</h1>
+            <p class="text-muted">Ministry of Interior - Guards Training School</p>
+            <div id="connectionStatus">
+                <span class="status-indicator status-loading"></span>
+                <span>Connecting to Google Sheets...</span>
+            </div>
+            <div class="last-updated" id="lastUpdated"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search by guard name, evaluator, or feedback..." onkeyup="filterData()">
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="loadData()">
+                        <i class="fas fa-sync-alt"></i> Refresh Data
+                    </button>
+                    <button class="btn btn-success" onclick="exportCSV()">
+                        <i class="fas fa-download"></i> Export CSV
+                    </button>
+                    <button class="btn btn-info" onclick="showStats()">
+                        <i class="fas fa-chart-bar"></i> Show Stats
+                    </button>
+                </div>
+            </div>
+
+            <div class="filters">
+                <div class="filter-item">
+                    <label>Course</label>
+                    <select id="courseFilter" onchange="filterData()">
+                        <option value="">All Courses</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Company</label>
+                    <select id="companyFilter" onchange="filterData()">
+                        <option value="">All Companies</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Location</label>
+                    <select id="locationFilter" onchange="filterData()">
+                        <option value="">All Locations</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Rating</label>
+                    <select id="ratingFilter" onchange="filterData()">
+                        <option value="">All Ratings</option>
+                        <option value="5">Excellent (5)</option>
+                        <option value="4">Good (4)</option>
+                        <option value="3">Average (3)</option>
+                        <option value="2">Poor (2)</option>
+                        <option value="1">Very Poor (1)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-value" id="totalCount">0</span>
+                    <span class="stat-label">Total Records</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="avgRating">0</span>
+                    <span class="stat-label">Average Rating</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="lowCount">0</span>
+                    <span class="stat-label">Low Ratings</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="highCount">0</span>
+                    <span class="stat-label">High Ratings</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-container">
+            <div id="tableContainer">
+                <div class="loading">
+                    <p>Click <strong>Refresh Data</strong> to load feedback data from Google Sheets</p>
+                    <button class="btn btn-primary" onclick="loadData()">
+                        <i class="fas fa-sync-alt"></i> Load Data from Google Sheets
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="pagination"></div>
+    </div>
+
+    <!-- Modal for Details -->
+    <div id="detailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <!-- Stats Modal -->
+    <div id="statsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeStatsModal()">&times;</span>
+            <div id="statsContent"></div>
+        </div>
+    </div>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <script>
+        // Configuration
+        const SHEET_ID = '1XQE-lDA3SDeM8T3xk6nrBkmQ4VWMluAmcCIgh9Y7e3g';
+        const SHEET_NAME = 'Form Responses 1';
+        const API_KEY = ''; // Leave empty for public sheets
+        const RECORDS_PER_PAGE = 20;
+
+        // Global variables
+        let allData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        let lastUpdateTime = null;
+
+        // Update connection status
+        function updateConnectionStatus(status, message) {
+            const statusDiv = document.getElementById('connectionStatus');
+            const indicator = statusDiv.querySelector('.status-indicator');
+            const text = statusDiv.querySelector('span:last-child');
+            
+            indicator.className = 'status-indicator';
+            
+            if (status === 'connected') {
+                indicator.classList.add('status-connected');
+                text.textContent = message || 'Connected to Google Sheets';
+            } else if (status === 'disconnected') {
+                indicator.classList.add('status-disconnected');
+                text.textContent = message || 'Disconnected';
+            } else {
+                indicator.classList.add('status-loading');
+                text.textContent = message || 'Loading...';
+            }
+        }
+
+        // Load data from Google Sheets
+        async function loadData() {
+            const container = document.getElementById('tableContainer');
+            updateConnectionStatus('loading', 'Connecting to Google Sheets...');
+            
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Fetching data from Google Sheets...</p>
+                    <p class="text-muted small">This may take a few seconds</p>
+                </div>
+            `;
+
+            try {
+                // Construct the URL for Google Sheets API
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+                
+                console.log('Fetching data from:', url);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                
+                // Parse the Google Sheets JSON response
+                const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonText);
+                
+                // Extract headers and rows
+                const headers = data.table.cols.map(col => col.label);
+                const rows = data.table.rows.map(row => row.c.map(cell => cell ? cell.v : null));
+                
+                console.log(`Loaded ${rows.length} rows from Google Sheets`);
+                
+                // Convert to array of objects
+                allData = rows.map(row => {
+                    const item = {};
+                    headers.forEach((header, index) => {
+                        item[header] = row[index];
+                    });
+                    return item;
+                });
+                
+                // Process data (convert ratings to numbers)
+                allData = allData.map(item => {
+                    const ratingColumns = [
+                        'General Appearance, المظهر العام [Your Opinion, رأيك]',
+                        'Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]',
+                        'Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]',
+                        'Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]',
+                        'Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]',
+                        'Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]',
+                        'General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]',
+                        'General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]',
+                        'General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]',
+                        'General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]'
+                    ];
+
+                    ratingColumns.forEach(col => {
+                        if (item[col] && typeof item[col] === 'string') {
+                            const value = item[col].trim();
+                            if (value === 'Excellent - ممتاز' || value === 'ممتاز' || value === 'Excellent') {
+                                item[col] = 5;
+                            } else if (value === 'Good - جيد' || value === 'جيد' || value === 'Good') {
+                                item[col] = 4;
+                            } else if (value === 'Average - متوسط' || value === 'متوسط' || value === 'Average') {
+                                item[col] = 3;
+                            } else if (value === 'Poor - ضعيف' || value === 'ضعيف' || value === 'Poor') {
+                                item[col] = 2;
+                            } else if (value === 'Very Poor - ضعيف جدا' || value === 'ضعيف جدا' || value === 'Very Poor') {
+                                item[col] = 1;
+                            } else if (!isNaN(value) && value !== '') {
+                                item[col] = parseInt(value);
+                            } else {
+                                item[col] = 0;
+                            }
+                        }
+                    });
+
+                    return item;
+                });
+                
+                // Update last update time
+                lastUpdateTime = new Date();
+                document.getElementById('lastUpdated').textContent = `Last updated: ${lastUpdateTime.toLocaleString()}`;
+                
+                // Update connection status
+                updateConnectionStatus('connected', `Connected! ${allData.length} records loaded`);
+                
+                // Populate filters and display data
+                populateFilters();
+                filterData();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                updateConnectionStatus('disconnected', `Error: ${error.message}`);
+                
+                container.innerHTML = `
+                    <div class="error">
+                        <h5>Error Loading Data from Google Sheets</h5>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><strong>Possible causes:</strong></p>
+                        <ul>
+                            <li>Google Sheet might not be publicly accessible</li>
+                            <li>Sheet name might be incorrect</li>
+                            <li>Network connection issue</li>
+                        </ul>
+                        <p><strong>Steps to fix:</strong></p>
+                        <ol>
+                            <li>Make sure your Google Sheet is shared as "Anyone with the link can view"</li>
+                            <li>Check that the sheet name is "Form Responses 1"</li>
+                            <li>Try refreshing the page</li>
+                        </ol>
+                        <div class="btn-group mt-3">
+                            <button class="btn btn-primary" onclick="loadData()">Try Again</button>
+                            <button class="btn btn-secondary" onclick="showHelp()">Show Help</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function populateFilters() {
+            // Get unique values
+            const courses = [...new Set(allData.map(item => item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)']).filter(Boolean))];
+            const companies = [...new Set(allData.map(item => item['Security guard company, اسم الشركة الأمنية لحارس الأمن']).filter(Boolean))];
+            const locations = [...new Set(allData.map(item => item['Work location, جهة العمل']).filter(Boolean))];
+
+            // Populate selects
+            const courseSelect = document.getElementById('courseFilter');
+            courseSelect.innerHTML = '<option value="">All Courses</option>';
+            courses.forEach(course => {
+                courseSelect.innerHTML += `<option value="${course}">${course}</option>`;
+            });
+
+            const companySelect = document.getElementById('companyFilter');
+            companySelect.innerHTML = '<option value="">All Companies</option>';
+            companies.forEach(company => {
+                companySelect.innerHTML += `<option value="${company}">${company}</option>`;
+            });
+
+            const locationSelect = document.getElementById('locationFilter');
+            locationSelect.innerHTML = '<option value="">All Locations</option>';
+            locations.forEach(location => {
+                locationSelect.innerHTML += `<option value="${location}">${location}</option>`;
+            });
+        }
+
+        function filterData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const courseFilter = document.getElementById('courseFilter').value;
+            const companyFilter = document.getElementById('companyFilter').value;
+            const locationFilter = document.getElementById('locationFilter').value;
+            const ratingFilter = document.getElementById('ratingFilter').value;
+
+            filteredData = allData.filter(item => {
+                const searchFields = [
+                    item['Security guard Name, اسم حارس الأمن'],
+                    item['Evaluator Name, اسم المُقيِّم'],
+                    item['Security guard company, اسم الشركة الأمنية لحارس الأمن'],
+                    item['YOU CAN WRITE DOWN EXTRA SUGGESTIONS - يمكنك كتابة اقتراحات إضافية وشكوى'],
+                    item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)']
+                ].filter(Boolean);
+                
+                const matchesSearch = !searchTerm || 
+                    searchFields.some(field => String(field).toLowerCase().includes(searchTerm));
+                
+                const matchesCourse = !courseFilter || 
+                    item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] === courseFilter;
+                
+                const matchesCompany = !companyFilter || 
+                    item['Security guard company, اسم الشركة الأمنية لحارس الأمن'] === companyFilter;
+                
+                const matchesLocation = !locationFilter || 
+                    item['Work location, جهة العمل'] === locationFilter;
+                
+                // Calculate average rating
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                const avgRating = ratings.length > 0 ? 
+                    (ratings.reduce((a, b) => a + Number(b), 0) / ratings.length).toFixed(1) : 0;
+                
+                const matchesRating = !ratingFilter || 
+                    Math.round(avgRating) === Number(ratingFilter);
+                
+                return matchesSearch && matchesCourse && matchesCompany && matchesLocation && matchesRating;
+            });
+
+            updateStats();
+            renderTable();
+            renderPagination();
+        }
+
+        function updateStats() {
+            const total = filteredData.length;
+            let totalRating = 0;
+            let ratingCount = 0;
+            let lowRatings = 0;
+            let highRatings = 0;
+
+            filteredData.forEach(item => {
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                if (ratings.length > 0) {
+                    const avg = ratings.reduce((a, b) => a + Number(b), 0) / ratings.length;
+                    totalRating += avg;
+                    ratingCount++;
+                    if (avg < 3) lowRatings++;
+                    if (avg >= 4) highRatings++;
+                }
+            });
+
+            const avg = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : 0;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('avgRating').textContent = avg;
+            document.getElementById('lowCount').textContent = lowRatings;
+            document.getElementById('highCount').textContent = highRatings;
+        }
+
+        function renderTable() {
+            const container = document.getElementById('tableContainer');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<div class="loading"><p>No feedback found. Try adjusting your filters.</p></div>';
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
+            const endIndex = startIndex + RECORDS_PER_PAGE;
+            const pageData = filteredData.slice(startIndex, endIndex);
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Guard Name</th>
+                            <th>Evaluator</th>
+                            <th>Course</th>
+                            <th>Company</th>
+                            <th>Location</th>
+                            <th>Rating</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            pageData.forEach((item, index) => {
+                const timestamp = new Date(item['Timestamp']).toLocaleDateString('en-GB');
+                const guardName = item['Security guard Name, اسم حارس الأمن'] || 'N/A';
+                const evaluatorName = item['Evaluator Name, اسم المُقيِّم'] || 'N/A';
+                const courseNo = item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] || 'N/A';
+                const company = item['Security guard company, اسم الشركة الأمنية لحارس الأمن'] || 'N/A';
+                const location = item['Work location, جهة العمل'] || 'N/A';
+                
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                const avgRating = ratings.length > 0 ? 
+                    (ratings.reduce((a, b) => a + Number(b), 0) / ratings.length).toFixed(1) : 0;
+                
+                const ratingClass = avgRating >= 4.5 ? 'rating-5' : 
+                                   avgRating >= 3.5 ? 'rating-4' : 
+                                   avgRating >= 2.5 ? 'rating-3' : 
+                                   avgRating >= 1.5 ? 'rating-2' : 'rating-1';
+
+                tableHTML += `
+                    <tr>
+                        <td>${timestamp}</td>
+                        <td>${guardName}</td>
+                        <td>${evaluatorName}</td>
+                        <td>${courseNo}</td>
+                        <td>${company}</td>
+                        <td>${location}</td>
+                        <td class="rating-cell ${ratingClass}">${avgRating}</td>
+                        <td>
+                            <button class="btn btn-info btn-sm" onclick="showDetails(${startIndex + index})">View</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredData.length / RECORDS_PER_PAGE);
+            const paginationContainer = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                paginationContainer.innerHTML = '';
+                return;
+            }
+
+            let paginationHTML = '';
+            
+            if (currentPage > 1) {
+                paginationHTML += `<button class="page-btn" onclick="changePage(${currentPage - 1})">Previous</button>`;
+            }
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    paginationHTML += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    paginationHTML += `<span style="padding: 5px;">...</span>`;
+                }
+            }
+            
+            if (currentPage < totalPages) {
+                paginationHTML += `<button class="page-btn" onclick="changePage(${currentPage + 1})">Next</button>`;
+            }
+            
+            paginationContainer.innerHTML = paginationHTML;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            renderTable();
+            renderPagination();
+        }
+
+        function showDetails(index) {
+            const item = filteredData[index];
+            
+            const ratingCategories = [
+                { name: 'General Appearance', value: item['General Appearance, المظهر العام [Your Opinion, رأيك]'] },
+                { name: 'Discipline at work', value: item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'] },
+                { name: 'Good conduct', value: item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'] },
+                { name: 'Obedience commands', value: item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'] },
+                { name: 'Attention at work', value: item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'] },
+                { name: 'Work under pressure', value: item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'] },
+                { name: 'Dealing with supervisors', value: item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'] },
+                { name: 'Dealing with colleagues', value: item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'] },
+                { name: 'Dealing with customers', value: item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'] },
+                { name: 'Dealing with emergencies', value: item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]'] }
+            ];
+            
+            // Calculate average rating
+            const ratings = ratingCategories.map(cat => cat.value).filter(r => !isNaN(r) && r !== '');
+            const avgRating = ratings.length > 0 ? 
+                (ratings.reduce((a, b) => a + Number(b), 0) / ratings.length).toFixed(1) : 0;
+            
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = `
+                <h4>Feedback Details</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="details-section">
+                            <strong>Evaluator Details:</strong><br>
+                            Name: ${item['Evaluator Name, اسم المُقيِّم'] || 'N/A'}<br>
+                            CPR: ${item['Evaluator CPR, المُقيِّم الرقم الشخصي'] || 'N/A'}<br>
+                            Location: ${item['Work location, جهة العمل'] || 'N/A'}<br>
+                            Contact: ${item['Evaluator Contact No, رقم التواصل'] || 'N/A'}
+                        </div>
+                        <div class="details-section">
+                            <strong>Security Guard Details:</strong><br>
+                            Name: ${item['Security guard Name, اسم حارس الأمن'] || 'N/A'}<br>
+                            CPR: ${item['Security guard CPR No, الرقم الشخصي لحارس الأمن'] || 'N/A'}<br>
+                            Company: ${item['Security guard company, اسم الشركة الأمنية لحارس الأمن'] || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="details-section">
+                            <strong>Course & Shift:</strong><br>
+                            Course: ${item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] || 'N/A'}<br>
+                            Shift Start: ${item['Shift Start Time, وقت بدء النوبة'] || 'N/A'}<br>
+                            Date: ${new Date(item['Timestamp']).toLocaleString('en-GB')}
+                        </div>
+                        <div class="details-section">
+                            <strong>Ratings Breakdown:</strong><br>
+                            ${ratingCategories.map(cat => `
+                                <div>${cat.name}: ${cat.value || 'N/A'}/5</div>
+                            `).join('')}
+                            <div class="mt-2"><strong>Average Rating: ${avgRating}/5</strong></div>
+                        </div>
+                    </div>
+                </div>
+                ${item['YOU CAN WRITE DOWN EXTRA SUGGESTIONS - يمكنك كتابة اقتراحات إضافية وشكوى'] ? `
+                    <div class="details-section mt-3">
+                        <strong>Extra Suggestions:</strong><br>
+                        ${item['YOU CAN WRITE_DOWN EXTRA SUGGESTIONS - يمكنك كتابة اقتراحات إضافية وشكوى']}
+                    </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('detailsModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('detailsModal').style.display = 'none';
+        }
+
+        function showStats() {
+            if (filteredData.length === 0) {
+                alert('No data to show statistics');
+                return;
+            }
+
+            // Calculate statistics
+            const total = filteredData.length;
+            let totalRating = 0;
+            let ratingCount = 0;
+            let lowRatings = 0;
+            let highRatings = 0;
+            let ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+            filteredData.forEach(item => {
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                if (ratings.length > 0) {
+                    const avg = ratings.reduce((a, b) => a + Number(b), 0) / ratings.length;
+                    totalRating += avg;
+                    ratingCount++;
+                    if (avg < 3) lowRatings++;
+                    if (avg >= 4) highRatings++;
+                    
+                    // Count rating distribution
+                    const rounded = Math.round(avg);
+                    if (rounded >= 1 && rounded <= 5) {
+                        ratingDistribution[rounded]++;
+                    }
+                }
+            });
+
+            const avg = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : 0;
+            const lowPercentage = total > 0 ? ((lowRatings / total) * 100).toFixed(1) : 0;
+            const highPercentage = total > 0 ? ((highRatings / total) * 100).toFixed(1) : 0;
+
+            const statsContent = document.getElementById('statsContent');
+            statsContent.innerHTML = `
+                <h4>Feedback Statistics</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="details-section">
+                            <strong>Overview:</strong><br>
+                            Total Records: ${total}<br>
+                            Average Rating: ${avg}/5<br>
+                            Low Ratings (&lt;3): ${lowRatings} (${lowPercentage}%)<br>
+                            High Ratings (≥4): ${highRatings} (${highPercentage}%)
+                        </div>
+                        <div class="details-section">
+                            <strong>Rating Distribution:</strong><br>
+                            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                                ${Object.entries(ratingDistribution).map(([rating, count]) => `
+                                    <div style="text-align: center; flex: 1;">
+                                        <div style="font-weight: bold; font-size: 18px;">${rating}</div>
+                                        <div style="font-size: 12px;">${count}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="details-section">
+                            <strong>Top Performers (Avg ≥ 4.5):</strong><br>
+                            ${getTopPerformers()}
+                        </div>
+                        <div class="details-section">
+                            <strong>Needs Improvement (Avg ≤ 2):</strong><br>
+                            ${getLowPerformers()}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('statsModal').style.display = 'block';
+        }
+
+        function getTopPerformers() {
+            const topPerformers = filteredData.filter(item => {
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                if (ratings.length === 0) return false;
+                const avg = ratings.reduce((a, b) => a + Number(b), 0) / ratings.length;
+                return avg >= 4.5;
+            }).slice(0, 5);
+
+            if (topPerformers.length === 0) return 'No top performers found';
+
+            return topPerformers.map(item => 
+                `${item['Security guard Name, اسم حارس الأمن'] || 'N/A'} (${item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] || 'N/A'})`
+            ).join('<br>');
+        }
+
+        function getLowPerformers() {
+            const lowPerformers = filteredData.filter(item => {
+                const ratings = [
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                ].filter(r => !isNaN(r) && r !== '');
+                
+                if (ratings.length === 0) return false;
+                const avg = ratings.reduce((a, b) => a + Number(b), 0) / ratings.length;
+                return avg <= 2;
+            }).slice(0, 5);
+
+            if (lowPerformers.length === 0) return 'No low performers found';
+
+            return lowPerformers.map(item => 
+                `${item['Security guard Name, اسم حارس الأمن'] || 'N/A'} (${item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] || 'N/A'})`
+            ).join('<br>');
+        }
+
+        function closeStatsModal() {
+            document.getElementById('statsModal').style.display = 'none';
+        }
+
+        function showHelp() {
+            const helpContent = `
+                <h4>Help & Troubleshooting</h4>
+                <div class="details-section">
+                    <strong>How to use this app:</strong>
+                    <ol>
+                        <li>Click <strong>Refresh Data</strong> to load data from Google Sheets</li>
+                        <li>Use <strong>Search</strong> to find specific guards or evaluators</li>
+                        <li>Use <strong>Filters</strong> to narrow down results</li>
+                        <li>Click <strong>View</strong> to see detailed ratings</li>
+                        <li>Click <strong>Export CSV</strong> to download data</li>
+                        <li>Click <strong>Show Stats</strong> for statistics</li>
+                    </ol>
+                </div>
+                <div class="details-section">
+                    <strong>Fixing Connection Issues:</strong>
+                    <ol>
+                        <li>Make sure your Google Sheet is <strong>publicly accessible</strong></li>
+                        <li>Click <strong>Share</strong> on your Google Sheet</li>
+                        <li>Select <strong>"Anyone with the link can view"</strong></li>
+                        <li>Copy the sheet ID from the URL</li>
+                        <li>Update the <code>SHEET_ID</code> in the code if needed</li>
+                    </ol>
+                </div>
+                <div class="details-section">
+                    <strong>Current Configuration:</strong><br>
+                    Sheet ID: ${SHEET_ID}<br>
+                    Sheet Name: ${SHEET_NAME}<br>
+                    Records Loaded: ${allData.length}
+                </div>
+            `;
+            
+            document.getElementById('modalContent').innerHTML = helpContent;
+            document.getElementById('detailsModal').style.display = 'block';
+        }
+
+        function exportCSV() {
+            if (filteredData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const headers = [
+                'Date', 'Guard Name', 'Evaluator', 'Course', 'Company', 'Location', 
+                'Avg Rating', 'General Appearance', 'Discipline', 'Good Conduct', 
+                'Obedience', 'Attention', 'Under Pressure', 'With Supervisors', 
+                'With Colleagues', 'With Customers', 'With Emergencies', 'Extra Suggestions'
+            ];
+
+            const csvContent = [headers.join(',')];
+
+            filteredData.forEach(item => {
+                const row = [
+                    new Date(item['Timestamp']).toLocaleDateString('en-GB'),
+                    item['Security guard Name, اسم حارس الأمن'] || '',
+                    item['Evaluator Name, اسم المُقيِّم'] || '',
+                    item['COURSE NO. (BG/RG), رقم الدورة (BG/RG)'] || '',
+                    item['Security guard company, اسم الشركة الأمنية لحارس الأمن'] || '',
+                    item['Work location, جهة العمل'] || '',
+                    
+                    (() => {
+                        const ratings = [
+                            item['General Appearance, المظهر العام [Your Opinion, رأيك]'],
+                            item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'],
+                            item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'],
+                            item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'],
+                            item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'],
+                            item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'],
+                            item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'],
+                            item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'],
+                            item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'],
+                            item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]']
+                        ].filter(r => !isNaN(r) && r !== '');
+                        
+                        return ratings.length > 0 ? 
+                            (ratings.reduce((a, b) => a + Number(b), 0) / ratings.length).toFixed(1) : 0;
+                    })(),
+                    
+                    item['General Appearance, المظهر العام [Your Opinion, رأيك]'] || '',
+                    item['Job Performance - الأداء الوظيفي [Discipline at work - الانظباط في العمل]'] || '',
+                    item['Job Performance - الأداء الوظيفي [Good conduct - حسن التصرف]'] || '',
+                    item['Job Performance - الأداء الوظيفي [Obedience commands - اطاعة الأوامر]'] || '',
+                    item['Job Performance - الأداء الوظيفي [Attention at work - الانتباه في العمل]'] || '',
+                    item['Job Performance - الأداء الوظيفي [Work under pressure - تحمل ضغط العمل]'] || '',
+                    item['General behavior - السلوك العام [Dealing with supervisors - التعامل مع المسئولين]'] || '',
+                    item['General behavior - السلوك العام [Dealing with colleagues - التعامل مع الزملاء]'] || '',
+                    item['General behavior - السلوك العام [Dealing with customers - التعامل مع الزبائن]'] || '',
+                    item['General behavior - السلوك العام [Dealing with emergency situations - التعامل مع الحالات الطارئة]'] || '',
+                    item['YOU CAN WRITE DOWN EXTRA SUGGESTIONS - يمكنك كتابة اقتراحات إضافية وشكوى'] || ''
+                ].map(field => {
+                    const value = String(field).replace(/"/g, '""');
+                    return `"${value}"`;
+                }).join(',');
+                
+                csvContent.push(row);
+            });
+
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `guard_feedback_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const detailsModal = document.getElementById('detailsModal');
+            const statsModal = document.getElementById('statsModal');
+            
+            if (event.target == detailsModal) {
+                closeModal();
+            }
+            if (event.target == statsModal) {
+                closeStatsModal();
+            }
+        }
+
+        // Auto-load data when page loads (optional)
+        window.onload = function() {
+            // Uncomment the line below to auto-load data on page load
+            // loadData();
+            
+            // Show welcome message
+            document.getElementById('tableContainer').innerHTML = `
+                <div class="loading">
+                    <h4>Welcome to Guard Training Feedback Viewer</h4>
+                    <p>This app fetches data directly from your Google Sheet in real-time.</p>
+                    <p><strong>Sheet ID:</strong> ${SHEET_ID}</p>
+                    <p><strong>Sheet Name:</strong> ${SHEET_NAME}</p>
+                    <div class="btn-group mt-3">
+                        <button class="btn btn-primary" onclick="loadData()">
+                            <i class="fas fa-sync-alt"></i> Load Data from Google Sheets
+                        </button>
+                        <button class="btn btn-secondary" onclick="showHelp()">
+                            <i class="fas fa-question-circle"></i> Help & Troubleshooting
+                        </button>
+                    </div>
+                </div>
+            `;
+        };
+    </script>
+</body>
+</html>
